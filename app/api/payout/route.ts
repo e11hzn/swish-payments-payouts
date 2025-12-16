@@ -39,33 +39,14 @@ export async function POST(request: Request) {
     const privateKeyPath = path.resolve(process.cwd(), 'mss-client-cert/Swish_Merchant_TestSigningCertificate_1234679304.key');
     const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
 
-    // Generate signature: Sign the payload with SHA-512
-    // createSign('sha512') internally hashes with SHA-512 then signs
+    // Generate signature
     const payloadString = JSON.stringify(payload);
+    const payloadHashed = crypto.createHash('sha512').update(payloadString).digest();
 
-    const sign = crypto.createSign('sha512');
-    sign.update(payloadString, 'utf8');
+    const sign = crypto.createSign('RSA-SHA512');
+    sign.update(payloadHashed);
     sign.end();
-    const signature = sign.sign({
-      key: privateKey,
-      padding: crypto.constants.RSA_PKCS1_PADDING,
-    }, 'base64');
-
-    // Verify the signature before sending
-    const certPath = path.resolve(process.cwd(), 'mss-client-cert/Swish_Merchant_TestSigningCertificate_1234679304.pem');
-    const certificate = fs.readFileSync(certPath, 'utf8');
-
-    const verify = crypto.createVerify('sha512');
-    verify.update(payloadString, 'utf8');
-    verify.end();
-    const isValidSignature = verify.verify({
-      key: certificate,
-      padding: crypto.constants.RSA_PKCS1_PADDING,
-    }, signature, 'base64');
-
-    if (!isValidSignature) {
-      throw new Error('Signature verification failed - generated signature is invalid');
-    }
+    const signature = sign.sign(privateKey, 'base64');
 
     const requestBody = {
       payload,
@@ -73,24 +54,11 @@ export async function POST(request: Request) {
       callbackUrl,
     };
 
-    // Log for debugging
-    console.log('=== PAYOUT REQUEST DEBUG ===');
-    console.log('Payload object:', JSON.stringify(payload, null, 2));
-    console.log('Payload string for signing:', payloadString);
-    console.log('Signature length:', signature.length);
-    console.log('Full request body:', JSON.stringify(requestBody, null, 2));
-    console.log('===========================');
-
     // Read the client certificate for TLS authentication (use regular merchant cert, not signing cert)
     const pfxPath = path.resolve(process.cwd(), 'mss-client-cert/Swish_Merchant_TestCertificate_1234679304.p12');
     const pfx = fs.readFileSync(pfxPath);
 
-    // should not be needed but included here for now
-    // const caCertPath = path.resolve(process.cwd(), 'mss-client-cert/Swish_TLS_RootCA.pem');
-    // const caCert = fs.readFileSync(caCertPath);
-
     const agent = new https.Agent({
-      // ca: caCert,
       passphrase: 'swish',
       pfx,
     });
@@ -130,7 +98,7 @@ export async function POST(request: Request) {
     });
 
     const result = await swishRequest;
-
+    console.log(`Payout ${instructionUUID} created`);
     return NextResponse.json(result);
   } catch (error) {
     console.error('Payout error:', error);
