@@ -1,37 +1,37 @@
-import { NextResponse } from 'next/server';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 
-export async function POST(request: Request) {
-  try {
-    const requestURL = new URL(request.url);
-    const { amount, message } = await request.json();
+// Configuration - Edit these values as needed
+const AMOUNT = '100.00';
+const MESSAGE = 'Test payout';
 
+async function executePayout() {
+  try {
     const instructionUUID = uuidv4().replace(/-/g, '').toUpperCase();
 
-    const callbackUrl = `https://${requestURL.host}/api/callback?id=${instructionUUID}`;
+    const callbackUrl = `https://your-domain.com/api/callback?id=${instructionUUID}`;
 
     // Ensure amount is formatted as string with 2 decimal places
-    const formattedAmount = parseFloat(amount).toFixed(2);
+    const formattedAmount = parseFloat(AMOUNT).toFixed(2);
 
     // Generate ISO 8601 timestamp without milliseconds
     const now = new Date();
     const instructionDate = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
 
     const payload = {
-      amount: formattedAmount,
-      currency: 'SEK',
-      instructionDate,
-      message,
+      payoutInstructionUUID: instructionUUID,
+      payerPaymentReference: 'payerRef',
+      payerAlias: '1234679304',
       payeeAlias: '46768648198',
       payeeSSN: '196210123235',
-      payerAlias: '1234679304',
-      payerPaymentReference: 'payerRef',
-      payoutInstructionUUID: instructionUUID,
+      amount: formattedAmount,
+      currency: 'SEK',
       payoutType: 'PAYOUT',
+      message: MESSAGE,
+      instructionDate,
       signingCertificateSerialNumber: '4F24C03A0295A0B53596240EA8C0F430',
     };
 
@@ -98,14 +98,23 @@ export async function POST(request: Request) {
     });
 
     const result = await swishRequest;
-    console.log(`Payout ${instructionUUID} created`);
-    return NextResponse.json(result);
+    console.log(`Payout ${instructionUUID} created successfully`);
+    console.log('Status Code:', result.statusCode);
+    console.log('Response:', result.data);
+    return result;
   } catch (error) {
     console.error('Payout error:', error);
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Something went wrong',
-      details: error
-    }, { status: 500 });
+    throw error;
   }
 }
 
+// Execute the payout
+executePayout()
+  .then(() => {
+    console.log('Script completed successfully');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Script failed:', error);
+    process.exit(1);
+  });

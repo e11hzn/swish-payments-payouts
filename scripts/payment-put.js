@@ -1,25 +1,24 @@
+// Configuration - Edit these values as needed
+const AMOUNT = '100';
+const MESSAGE = 'Test payment';
 
-import { NextResponse } from 'next/server';
-import https from 'https';
-import fs from 'fs';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+// Script starts here
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
-export async function POST(request: Request) {
+async function createPaymentRequest() {
   try {
-    const requestURL = new URL(request.url);
-    const { amount, message } = await request.json();
-
     const instructionUUID = uuidv4().replace(/-/g, '').toUpperCase();
-    
-    const callbackUrl = `https://${requestURL.host}/api/callback?id=${instructionUUID}`;
 
+    const callbackUrl = `https://your-domain.com/api/callback?id=${instructionUUID}`;
 
     const payload = {
-      amount,
+      amount: AMOUNT,
       callbackUrl,
       currency: 'SEK',
-      message,
+      message: MESSAGE,
       payeeAlias: '1234679304',
       payeePaymentReference: '0123456789',
       payerAlias: '4671234768',
@@ -44,7 +43,7 @@ export async function POST(request: Request) {
       agent,
     };
 
-    const swishRequest = new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
         let data = '';
         res.on('data', (chunk) => {
@@ -52,7 +51,7 @@ export async function POST(request: Request) {
         });
         res.on('end', () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ statusCode: res.statusCode, data });
+            resolve({ statusCode: res.statusCode, data, instructionUUID });
           } else {
             reject(new Error(`Request failed with status code ${res.statusCode}: ${data}`));
           }
@@ -67,11 +66,17 @@ export async function POST(request: Request) {
       req.end();
     });
 
-    const result = await swishRequest;
+    console.log('Payment request created successfully!');
+    console.log('Status Code:', result.statusCode);
+    console.log('Instruction UUID:', result.instructionUUID);
+    console.log('Response:', result.data || 'No response body');
 
-    return NextResponse.json(result);
+    return result;
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
+    console.error('Error creating payment request:', error.message);
+    process.exit(1);
   }
 }
+
+// Run the script
+createPaymentRequest();
